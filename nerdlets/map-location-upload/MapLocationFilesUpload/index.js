@@ -203,23 +203,27 @@ export default class MapLocationFilesUpload extends React.Component {
 
     this.setState({ savingMapLocations: true });
 
-    await Promise.all(
-      mapLocations.map(async ml => {
-        const {
-          data: mapLocation,
-          error: mapLocationWriteError
-        } = await this.writeMapLocation({
-          location: { ...ml, map: mapGuid }
-        });
+    const concurrentReqs = 10;
 
-        this.onMapLocationWrite({
-          mapLocation: {
-            data: mapLocation.nerdStorageWriteDocument,
+    while(mapLocations.length){
+      await Promise.all(
+        mapLocations.splice(0, concurrentReqs).map(async ml => {
+          const {
+            data: mapLocation,
             error: mapLocationWriteError
-          }
-        });
-      })
-    );
+          } = await this.writeMapLocation({
+            location: { ...ml, map: mapGuid }
+          });
+  
+          this.onMapLocationWrite({
+            mapLocation: {
+              data: mapLocation.nerdStorageWriteDocument,
+              error: mapLocationWriteError
+            }
+          });
+        })
+      )
+    }
 
     this.setState({ savingMapLocations: false });
     // TODO: - Don't auto-navigate away, show results first
@@ -324,6 +328,7 @@ export default class MapLocationFilesUpload extends React.Component {
 
     const columns = this.getColumns();
 
+    
     if (savingMapLocations) {
       return <Spinner />;
     }

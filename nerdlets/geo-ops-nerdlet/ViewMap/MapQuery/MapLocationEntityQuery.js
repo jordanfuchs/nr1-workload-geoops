@@ -16,28 +16,41 @@ export default class MapLocationEntityQuery extends React.PureComponent {
     end_time,
     fetchPolicyType = NerdGraphQuery.FETCH_POLICY_TYPE.NO_CACHE
   }) {
-    const variables = { begin_time, end_time, entityGuids };
-    const query = getEntitiesByGuidsQuery(variables);
-    // console.debug('MapLocationEntityQuery', query);
-    const { errors, data } = await NerdGraphQuery.query({
-      query,
-      variables,
-      fetchPolicyType
-    });
-    if (errors) {
-      return { errors, entities: null };
-    }
-    // console.debug('MapLocationEntityQuery.query', data);
-    const { actor } = data;
-    let entities = [];
-    if (actor) {
-      Object.keys(actor).forEach(query => {
-        if (query.startsWith('query')) {
-          entities = [...entities, ...actor[query]];
-        }
+    const queries = [];
+    while(entityGuids.length){
+      let entity_guids = entityGuids.splice(0, 200);
+      let query = getEntitiesByGuidsQuery({begin_time, end_time, entityGuids: entity_guids});
+      queries.push({
+        query, 
+        variables: { begin_time, end_time, entityGuids: entity_guids }
       });
-      entities = entities.map(mapWorkloadStatusValueToAlertSeverity);
     }
+
+    const queryResults = await Promise.all(queries.map(({query, variables}) => {
+      return NerdGraphQuery.query({
+        query,
+        variables,
+        fetchPolicyType
+      })
+    }))
+
+    if (queryResults.find(({errors}) => errors)){
+      return {errors, entities: null};
+    }
+
+    // console.debug('MapLocationEntityQuery.query', data);
+
+    let entities = [];
+    queryResults.forEach(({data}) => {
+      if (data.actor){
+        Object.keys(data.actor).forEach(query => {
+          if (query.startsWith('query')){
+            entities = [...entities, ...data.actor[query]];
+          }
+        })
+      }
+    });
+    entities = entities.map(mapWorkloadStatusValueToAlertSeverity);
     return { entities, errors: null };
   }
 
